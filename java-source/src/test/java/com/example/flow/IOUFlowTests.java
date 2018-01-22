@@ -10,7 +10,6 @@ import net.corda.core.contracts.TransactionVerificationException;
 import net.corda.core.transactions.SignedTransaction;
 import net.corda.node.internal.StartedNode;
 import net.corda.testing.node.MockNetwork;
-import net.corda.testing.node.MockNetwork.BasketOfNodes;
 import net.corda.testing.node.MockNetwork.MockNode;
 import org.junit.After;
 import org.junit.Before;
@@ -20,8 +19,7 @@ import org.junit.rules.ExpectedException;
 
 import java.util.List;
 
-import static net.corda.testing.CoreTestUtils.setCordappPackages;
-import static net.corda.testing.CoreTestUtils.unsetCordappPackages;
+import static net.corda.testing.node.NodeTestUtils.startFlow;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.junit.Assert.assertEquals;
 
@@ -32,13 +30,11 @@ public class IOUFlowTests {
 
     @Before
     public void setup() {
-        setCordappPackages("com.example.contract");
-        network = new MockNetwork();
-        BasketOfNodes nodes = network.createSomeNodes(2);
-        a = nodes.getPartyNodes().get(0);
-        b = nodes.getPartyNodes().get(1);
+        network = new MockNetwork(ImmutableList.of("com.example.contract"));
+        a = network.createPartyNode();
+        b = network.createPartyNode();
         // For real nodes this happens automatically, but we have to manually register the flow for tests.
-        for (StartedNode<MockNode> node : nodes.getPartyNodes()) {
+        for (StartedNode<MockNode> node : ImmutableList.of(a, b)) {
             node.registerInitiatedFlow(ExampleFlow.Acceptor.class);
         }
         network.runNetwork();
@@ -46,7 +42,6 @@ public class IOUFlowTests {
 
     @After
     public void tearDown() {
-        unsetCordappPackages();
         network.stopNodes();
     }
 
@@ -57,7 +52,7 @@ public class IOUFlowTests {
     public void flowRejectsInvalidIOUs() throws Exception {
         // The IOUContract specifies that IOUs cannot have negative values.
         ExampleFlow.Initiator flow = new ExampleFlow.Initiator(-1, b.getInfo().getLegalIdentities().get(0));
-        CordaFuture<SignedTransaction> future = a.getServices().startFlow(flow).getResultFuture();
+        CordaFuture<SignedTransaction> future = startFlow(a.getServices(), flow).getResultFuture();
         network.runNetwork();
 
         // The IOUContract specifies that IOUs cannot have negative values.
@@ -68,7 +63,7 @@ public class IOUFlowTests {
     @Test
     public void signedTransactionReturnedByTheFlowIsSignedByTheInitiator() throws Exception {
         ExampleFlow.Initiator flow = new ExampleFlow.Initiator(1, b.getInfo().getLegalIdentities().get(0));
-        CordaFuture<SignedTransaction> future = a.getServices().startFlow(flow).getResultFuture();
+        CordaFuture<SignedTransaction> future = startFlow(a.getServices(), flow).getResultFuture();
         network.runNetwork();
 
         SignedTransaction signedTx = future.get();
@@ -78,7 +73,7 @@ public class IOUFlowTests {
     @Test
     public void signedTransactionReturnedByTheFlowIsSignedByTheAcceptor() throws Exception {
         ExampleFlow.Initiator flow = new ExampleFlow.Initiator(1, b.getInfo().getLegalIdentities().get(0));
-        CordaFuture<SignedTransaction> future = a.getServices().startFlow(flow).getResultFuture();
+        CordaFuture<SignedTransaction> future = startFlow(a.getServices(), flow).getResultFuture();
         network.runNetwork();
 
         SignedTransaction signedTx = future.get();
@@ -88,7 +83,7 @@ public class IOUFlowTests {
     @Test
     public void flowRecordsATransactionInBothPartiesTransactionStorages() throws Exception {
         ExampleFlow.Initiator flow = new ExampleFlow.Initiator(1, b.getInfo().getLegalIdentities().get(0));
-        CordaFuture<SignedTransaction> future = a.getServices().startFlow(flow).getResultFuture();
+        CordaFuture<SignedTransaction> future = startFlow(a.getServices(), flow).getResultFuture();
         network.runNetwork();
         SignedTransaction signedTx = future.get();
 
@@ -102,7 +97,7 @@ public class IOUFlowTests {
     public void recordedTransactionHasNoInputsAndASingleOutputTheInputIOU() throws Exception {
         Integer iouValue = 1;
         ExampleFlow.Initiator flow = new ExampleFlow.Initiator(iouValue, b.getInfo().getLegalIdentities().get(0));
-        CordaFuture<SignedTransaction> future = a.getServices().startFlow(flow).getResultFuture();
+        CordaFuture<SignedTransaction> future = startFlow(a.getServices(), flow).getResultFuture();
         network.runNetwork();
         SignedTransaction signedTx = future.get();
 
@@ -123,7 +118,7 @@ public class IOUFlowTests {
     public void flowRecordsTheCorrectIOUInBothPartiesVaults() throws Exception {
         Integer iouValue = 1;
         ExampleFlow.Initiator flow = new ExampleFlow.Initiator(1, b.getInfo().getLegalIdentities().get(0));
-        CordaFuture<SignedTransaction> future = a.getServices().startFlow(flow).getResultFuture();
+        CordaFuture<SignedTransaction> future = startFlow(a.getServices(), flow).getResultFuture();
         network.runNetwork();
         future.get();
 
